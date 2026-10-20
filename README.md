@@ -37,7 +37,7 @@
 
 ## نسخة تجريبية مجانية
 
-نسخة كاملة على Hugging Face Spaces بكاميرات محاكاة من صور عامة لأماكن في السعودية: [docs/hosting.md](docs/hosting.md).
+نسخة كاملة على سيرفر Oracle Cloud المجاني (Always Free) بأمر تثبيت واحد، مع HTTPS وتحديث تلقائي، وكاميرات محاكاة من صور عامة لأماكن في السعودية: [docs/hosting.md](docs/hosting.md).
 
 ## التشغيل السريع (Docker)
 
