@@ -1,7 +1,7 @@
-# Rased all-in-one demo image for a free Hugging Face Space (Docker SDK, CPU basic: 2 vCPU, 16 GB).
-# Everything in one container: PostgreSQL, API + command centre, analytics, vision, training worker,
-# and a local RTSP server that plays sample clips as if they were cameras.
-# Data lives inside the container and resets when the Space restarts: it is a demo, not production.
+# Rased all-in-one demo image (amd64 or arm64): a Hugging Face Space, or a single small server such as
+# Oracle Cloud Always Free (deploy/oracle). Everything in one container: PostgreSQL, API + command centre,
+# analytics, vision, training worker, and a local RTSP server that plays sample clips as if they were cameras.
+# Data lives in /home/user: mount a volume there to keep it across restarts (deploy/oracle does).
 
 FROM node:20-bookworm-slim AS web
 WORKDIR /src/web
@@ -42,7 +42,8 @@ COPY --from=web /src/web/dist /app/web
 RUN mkdir -p /app/models \
  && curl -fsSL -o /app/models/yolo11n-pose.pt https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-pose.pt \
  && curl -fsSL -o /app/models/yolo11n.pt https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt \
- && curl -fsSL https://github.com/bluenviron/mediamtx/releases/download/v1.9.3/mediamtx_v1.9.3_linux_amd64.tar.gz | tar -xz -C /usr/local/bin mediamtx
+ && case "$(dpkg --print-architecture)" in arm64) MTX=arm64v8 ;; *) MTX=amd64 ;; esac \
+ && curl -fsSL "https://github.com/bluenviron/mediamtx/releases/download/v1.9.3/mediamtx_v1.9.3_linux_${MTX}.tar.gz" | tar -xz -C /usr/local/bin mediamtx
 COPY samples /app/samples
 COPY scripts /app/scripts
 COPY deploy/demo /app/demo

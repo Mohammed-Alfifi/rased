@@ -1,0 +1,34 @@
+# Rased on one small server (Oracle Cloud Always Free, or any Ubuntu machine with Docker).
+# Started by install.sh: docker compose -f deploy/oracle/compose.yml --env-file /etc/rased/compose.env up -d --build
+name: rased
+
+services:
+  rased:
+    build:
+      context: ../..
+      dockerfile: deploy/hf/Dockerfile
+    image: rased-demo:local
+    restart: unless-stopped
+    env_file: /etc/rased/app.env
+    environment:
+      RASED_DEMO_LOGINS: ${RASED_DEMO_LOGINS:-1}
+    volumes:
+      - rased-home:/home/user          # database, clips, training data, trained models
+    expose: ["7860"]
+
+  caddy:
+    image: caddy:2.8.4
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      RASED_DOMAIN: ${RASED_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./starting.html:/srv/starting.html:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  rased-home:
+  caddy-data:
+  caddy-config:

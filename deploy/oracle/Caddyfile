@@ -1,0 +1,13 @@
+# HTTPS with an automatic certificate. RASED_DOMAIN is <ip-with-dashes>.sslip.io unless you set your own.
+{$RASED_DOMAIN} {
+	encode gzip
+	reverse_proxy rased:7860 {
+		flush_interval -1
+	}
+	# While the system is still building or starting, show a friendly page instead of an error.
+	handle_errors {
+		root * /srv
+		rewrite * /starting.html
+		file_server
+	}
+}

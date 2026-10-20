@@ -1,0 +1,49 @@
+# Rehearses the Oracle Cloud install on an ARM (aarch64) Ubuntu machine like the Always Free server:
+# runs deploy/oracle/install.sh, then checks the site, the login and that the cameras come online.
+name: Oracle install check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["deploy/oracle/**", "deploy/hf/**", ".github/workflows/oracle-check.yml"]
+
+jobs:
+  arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install (as on the server)
+        run: sudo RASED_ADMIN_PASSWORD=Check-Admin-2026 RASED_DOMAIN=http://localhost deploy/oracle/install.sh
+      - name: Site, login and cameras
+        run: |
+          for i in $(seq 1 60); do curl -fs http://localhost/api/health && break; sleep 5; done
+          curl -fs http://localhost/ | grep -q '<div id="root">'
+          TOKEN=$(curl -fs -H 'content-type: application/json' -d '{"username":"admin","password":"Check-Admin-2026"}' \
+                  http://localhost/api/auth/login | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
+          for i in $(seq 1 40); do
+            ONLINE=$(curl -fs -H "authorization: Bearer $TOKEN" http://localhost/api/cameras \
+                     | python3 -c 'import sys,json; print(sum(1 for c in json.load(sys.stdin) if c.get("isOnline")))')
+            echo "cameras online: $ONLINE"
+            [ "$ONLINE" -ge 4 ] && break
+            sleep 15
+          done
+          [ "$ONLINE" -ge 4 ]
+          echo "::notice::arm64 install OK, $ONLINE cameras online"
+      - name: Second run keeps the data
+        run: |
+          sudo RASED_DOMAIN=http://localhost deploy/oracle/install.sh
+          sudo grep -q Check-Admin-2026 /etc/rased/admin-password.txt
+      - name: Logs on failure
+        if: failure()
+        run: |
+          cd deploy/oracle
+          sudo docker compose --env-file /etc/rased/compose.env ps -a
+          LOGS=$(sudo docker compose --env-file /etc/rased/compose.env logs --no-color --tail 400 2>&1 \
+                 | grep -iE 'error|exception|traceback|fail|refused|denied|not found' | tail -40 || true)
+          LOGS="${LOGS//'%'/'%25'}"; LOGS="${LOGS//$'\n'/'%0A'}"
+          echo "::warning title=container errors::${LOGS:-none}"
+          INST=$(sudo tail -25 /var/log/rased-install.log 2>/dev/null || true)
+          INST="${INST//'%'/'%25'}"; INST="${INST//$'\n'/'%0A'}"
+          echo "::warning title=install log::${INST:-none}"
