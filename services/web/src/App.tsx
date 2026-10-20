@@ -13,6 +13,7 @@ import LoginPage from './pages/Login';
 import MapPage from './pages/Map';
 import ReportsPage from './pages/Reports';
 import SettingsPage from './pages/Settings';
+import StudioPage from './pages/Studio';
 
 interface SystemStatus { camerasEnabled: number; camerasOnline: number; shadowMode: boolean; demoData: boolean }
 
@@ -24,6 +25,7 @@ const NAV: { to: string; label: string; min: Role }[] = [
   { to: '/cameras', label: 'الكاميرات', min: 'operator' },
   { to: '/reports', label: 'التقارير', min: 'supervisor' },
   { to: '/audit', label: 'سجل التدقيق', min: 'manager' },
+  { to: '/studio', label: 'تحسين النظام', min: 'admin' },
   { to: '/settings', label: 'الإعدادات', min: 'admin' },
 ];
 
@@ -109,6 +111,7 @@ function Shell() {
           {atLeast(user?.role, 'supervisor') && <Route path="/reports" element={<ReportsPage />} />}
           {atLeast(user?.role, 'manager') && <Route path="/audit" element={<AuditPage />} />}
           {atLeast(user?.role, 'admin') && <Route path="/settings" element={<SettingsPage />} />}
+          {atLeast(user?.role, 'admin') && <Route path="/studio" element={<StudioPage />} />}
           <Route path="*" element={<Navigate to="/alerts" replace />} />
         </Routes>
       </div>

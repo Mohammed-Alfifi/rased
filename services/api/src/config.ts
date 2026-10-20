@@ -15,6 +15,7 @@ export const config = {
   serviceKey: isProd ? required('RASED_SERVICE_KEY') : (process.env.RASED_SERVICE_KEY ?? 'dev-service-key'),
   jwtTtl: process.env.RASED_JWT_TTL ?? '8h',
   clipsDir: process.env.RASED_CLIPS_DIR ?? './data/clips',
+  trainingDir: process.env.RASED_TRAINING_DIR ?? './data/training', // labelled clips for the training studio
   webDir: process.env.RASED_WEB_DIR, // serve the built command centre from the API when set
   adminUsername: process.env.RASED_ADMIN_USERNAME ?? 'admin',
   adminPassword: process.env.RASED_ADMIN_PASSWORD, // first start only; required if no users exist

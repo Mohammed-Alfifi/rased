@@ -44,14 +44,25 @@ class FightRule(Rule):
     def __init__(self, model_path: Optional[str] = None, cooldown_s: float = 120.0) -> None:
         self.cooldown = Cooldown(cooldown_s)
         self.classifier: Optional[FightClassifier] = None
-        path = model_path or os.environ.get("RASED_FIGHT_MODEL")
+        self.model_path: Optional[str] = None
+        self.default_threshold = 0.6  # global value from the active model; a camera param overrides it
+        self.set_model(model_path or os.environ.get("RASED_FIGHT_MODEL"))
+        self._last_eval = 0.0
+        self._hits: dict[tuple[int, int], int] = {}
+
+    def set_model(self, path: Optional[str]) -> None:
+        """Switch model at run time (the training studio activated a new version), or back to rules."""
+        if path == self.model_path:
+            return
+        self.model_path = path
+        self.classifier = None
         if path and os.path.exists(path):
             try:
                 self.classifier = FightClassifier(path)
             except Exception:  # pragma: no cover - depends on runtime
-                log.exception("could not load fight model, using rules")
-        self._last_eval = 0.0
-        self._hits: dict[tuple[int, int], int] = {}
+                log.exception("could not load fight model %s, using rules", path)
+        elif path:
+            log.warning("fight model %s not found, using rules", path)
 
     @property
     def mode(self) -> str:
@@ -93,7 +104,7 @@ class FightRule(Rule):
                 continue
             if self.classifier:
                 score = self.classifier.predict(pair_window_features(seq_a, seq_b, ctx.aspect))
-                hit = score >= float(ctx.param("fight_threshold", 0.6))
+                hit = score >= float(ctx.param("fight_threshold", self.default_threshold))
             else:
                 ea, eb = wrist_energy(seq_a, ctx.aspect), wrist_energy(seq_b, ctx.aspect)
                 hi, lo = max(ea, eb), min(ea, eb)

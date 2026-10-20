@@ -14,18 +14,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
-import torch
-from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "services" / "vision"))
-from fight_model import FightNet, FightNetProb  # noqa: E402
-from metrics import best_threshold, summarize, video_scores, write_report  # noqa: E402
+from rased_trainer.metrics import write_report  # noqa: E402
+from rased_trainer.train import evaluate, export_onnx, fit  # noqa: E402
 from rased_vision.pose_features import FEATURE_DIM, WINDOW  # noqa: E402
 
 
@@ -52,27 +47,6 @@ def load(path: Path) -> dict:
     return {"X": d["X"].astype(np.float32), "y": d["y"].astype(np.int64), "video": d["video"].astype(np.int64)}
 
 
-def augment(x: torch.Tensor) -> torch.Tensor:
-    """Mirror left/right and add small noise: fights look the same flipped."""
-    if torch.rand(1).item() < 0.5:
-        x = x.clone()
-        pos = x[..., :68].view(*x.shape[:2], 2, 17, 2)
-        pos[..., 0] = -pos[..., 0]
-        vel = x[..., 68:136].view(*x.shape[:2], 2, 17, 2)
-        vel[..., 0] = -vel[..., 0]
-    return x + torch.randn_like(x) * 0.02
-
-
-@torch.no_grad()
-def predict(model: nn.Module, X: np.ndarray, device: str, batch: int = 512) -> np.ndarray:
-    model.eval()
-    out = []
-    for i in range(0, len(X), batch):
-        xb = torch.from_numpy(X[i:i + batch]).to(device)
-        out.append(torch.sigmoid(model(xb)).cpu().numpy())
-    return np.concatenate(out) if out else np.zeros(0)
-
-
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="training/data")
@@ -86,80 +60,33 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
 
-    torch.manual_seed(args.seed)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
     if args.synthetic:
-        train, val = synthetic(80, 1), synthetic(30, 2)
+        train, val, test = synthetic(80, 1), synthetic(30, 2), synthetic(30, 3)
     else:
         train, val = load(Path(args.data) / "train.npz"), load(Path(args.data) / "val.npz")
-    print(f"train windows={len(train['y'])} (fight {train['y'].mean():.0%})  val windows={len(val['y'])}  device={device}")
+        test_path = Path(args.data) / "test.npz"
+        # RWF-2000 has no separate test split: fall back to validation (stated in the report)
+        test = load(test_path) if test_path.exists() else val
 
-    pos_weight = torch.tensor([(1 - train["y"].mean()) / max(train["y"].mean(), 1e-6)], device=device)
-    loader = DataLoader(TensorDataset(torch.from_numpy(train["X"]), torch.from_numpy(train["y"]).float()),
-                        batch_size=args.batch, shuffle=True, drop_last=False)
-    model = FightNet(FEATURE_DIM).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
-    loss_fn = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-
-    best_f1, best_epoch, history = -1.0, 0, []
-    for epoch in range(1, args.epochs + 1):
-        model.train()
-        t0, total = time.time(), 0.0
-        for xb, yb in loader:
-            xb, yb = augment(xb.to(device)), yb.to(device)
-            opt.zero_grad()
-            loss = loss_fn(model(xb), yb)
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step()
-            total += loss.item() * len(yb)
-        sched.step()
-        vp = predict(model, val["X"], device)
-        vs, vl = video_scores(vp, val["video"], val["y"])
-        m = summarize(vs, vl, 0.5)
-        history.append({"epoch": epoch, "loss": total / len(train["y"]), **{k: m[k] for k in ("precision", "recall", "f1", "auc")}})
-        print(f"epoch {epoch:3d} loss={total / len(train['y']):.4f} video f1={m['f1']:.3f} "
-              f"recall={m['recall']:.3f} auc={m['auc']:.3f} ({time.time() - t0:.1f}s)")
-        if m["f1"] > best_f1:
-            best_f1, best_epoch = m["f1"], epoch
-            torch.save(model.state_dict(), out / "best.pt")
-        elif epoch - best_epoch >= args.patience:
-            print(f"early stop: no improvement for {args.patience} epochs")
-            break
-
-    model.load_state_dict(torch.load(out / "best.pt", map_location=device))
-    vp = predict(model, val["X"], device)
-    vs, vl = video_scores(vp, val["video"], val["y"])
-    threshold = best_threshold(vs, vl, args.recall_target)
+    model, history = fit(train, val, epochs=args.epochs, lr=args.lr, batch=args.batch, patience=args.patience,
+                         seed=args.seed, workdir=out)
+    m = evaluate(model, val, test, args.recall_target)
     report = {
-        "threshold": round(threshold, 3),
+        "threshold": m["threshold"],
         "recall_target": args.recall_target,
-        "best_epoch": best_epoch,
-        "window": summarize(vp, val["y"], threshold),
-        "video": summarize(vs, vl, threshold),
+        "window": m["test"]["window"],
+        "video": m["test"]["video"],
+        "validation": m["val"]["video"],
+        "test_is_validation": test is val,
         "history": history,
         "synthetic": args.synthetic,
     }
     write_report(out / "report.json", report)
-    (out / "threshold.txt").write_text(f"{threshold:.3f}\n")
-
-    # Export: probability output, dynamic batch, fixed window length.
-    export = FightNetProb(model.to("cpu")).eval()
-    dummy = torch.zeros(1, WINDOW, FEATURE_DIM)
-    torch.onnx.export(export, dummy, out / "fight.onnx", input_names=["x"], output_names=["prob"],
-                      dynamic_axes={"x": {0: "batch"}, "prob": {0: "batch"}}, opset_version=17, dynamo=False)
-    # Check the ONNX file gives the same answers as PyTorch.
-    import onnxruntime as ort
-
-    sess = ort.InferenceSession(str(out / "fight.onnx"), providers=["CPUExecutionProvider"])
-    sample = val["X"][:16]
-    onnx_p = sess.run(None, {"x": sample})[0].reshape(-1)
-    torch_p = export(torch.from_numpy(sample)).detach().numpy().reshape(-1)
-    diff = float(np.abs(onnx_p - torch_p).max())
+    (out / "threshold.txt").write_text(f"{m['threshold']:.3f}\n")
+    diff = export_onnx(model, out / "fight.onnx", val["X"])
     print(f"ONNX export ok, max |onnx - torch| = {diff:.2e}")
     print(json.dumps({k: report[k] for k in ("threshold", "video")}, indent=2))
 

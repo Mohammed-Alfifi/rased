@@ -17,7 +17,9 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:20-alpine
 ENV NODE_ENV=production TZ=Asia/Riyadh RASED_WEB_DIR=/app/web RASED_CLIPS_DIR=/data/clips
-RUN apk add --no-cache tzdata && addgroup -S rased && adduser -S rased -G rased
+# same uid as the vision/trainer image, so the shared training volume is writable by both
+RUN apk add --no-cache tzdata && addgroup -S -g 10001 rased && adduser -S -u 10001 -G rased rased \
+ && mkdir -p /data/training /data/clips && chown -R rased:rased /data
 WORKDIR /app
 COPY --from=api /api/node_modules ./node_modules
 COPY --from=api /api/dist ./dist

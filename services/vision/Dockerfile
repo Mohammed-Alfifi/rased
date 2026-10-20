@@ -17,14 +17,15 @@ RUN python3 -m pip install --upgrade pip \
  && python3 -m pip install --index-url ${TORCH_INDEX} torch torchvision
 COPY pyproject.toml ./
 COPY rased_vision ./rased_vision
-RUN python3 -m pip install .
+COPY rased_trainer ./rased_trainer
+RUN python3 -m pip install ".[trainer]"
 
 # Model weights are baked into the image so the facility can run offline.
 RUN mkdir -p models \
  && curl -fsSL -o models/yolo11n-pose.pt https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-pose.pt \
  && curl -fsSL -o models/yolo11n.pt https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt
 
-RUN useradd --system --uid 10001 rased && mkdir -p /data/clips && chown -R rased /app /data
+RUN useradd --system --uid 10001 rased && mkdir -p /data/clips /data/models /data/training && chown -R rased /app /data
 USER rased
 ENV RASED_CLIPS_DIR=/data/clips YOLO_CONFIG_DIR=/tmp/ultralytics
 CMD ["python3", "-m", "rased_vision.main"]

@@ -16,7 +16,8 @@
 | التنبؤ | توقع المؤشر لكل منطقة خلال 24 ساعة (Holt-Winters أو النمط اليومي)، والمناطق الساخنة، وتقرير «ماذا يسبق الحوادث» | يعمل |
 | مركز القيادة | التنبيهات مباشرة (SSE) مع المقطع والقرار، وخريطة المنشأة، والتنبؤ، والكاميرات ومحرر المناطق، والعدّ، والتقارير ومؤشرات النجاح، وسجل التدقيق، والإعدادات | يعمل |
 | الحوكمة | الصلاحيات حسب الدور، وسجل تدقيق للإضافة فقط، وتمويه الوجوه، ومدد الاحتفاظ والحذف التلقائي، ووضع الظل، والتشغيل المحلي بدون إنترنت | يعمل |
-| نموذج العراك المدرّب | خط كامل: تجهيز البيانات، والتدريب، والتقييم، والتصدير إلى ONNX، والتحميل في الخدمة | جاهز للتدريب: يحتاج كرت شاشة وبيانات (انظر [training/README.md](training/README.md)) |
+| تحسين النظام بدون مختص | تحويل قرارات المشغّلين إلى بيانات مصنّفة، والتقسيم، والتدريب من الواجهة، والمقارنة بالنموذج الحالي، والتفعيل ببوابة جودة، واقتراحات ضبط القواعد لكل كاميرا | يعمل ([docs/training-studio.md](docs/training-studio.md)) |
+| نموذج العراك المدرّب | خط كامل من الواجهة أو من سطر الأوامر: التدريب، والتقييم، والتصدير إلى ONNX، والتفعيل بدون إعادة تشغيل | يعمل، ويحتاج بيانات حقيقية كافية لنموذج يُعتمد عليه |
 
 إلى أن يُدرَّب نموذج العراك، يعمل الكشف بقواعد مبنية على حركة الذراعين وقرب الأشخاص. الواجهة تبيّن الوضع المستخدم لكل كاميرا.
 
@@ -33,6 +34,10 @@
 ```
 
 التفاصيل في [docs/architecture.md](docs/architecture.md).
+
+## نسخة تجريبية مجانية
+
+نسخة كاملة على Hugging Face Spaces بكاميرات محاكاة من صور عامة لأماكن في السعودية: [docs/hosting.md](docs/hosting.md).
 
 ## التشغيل السريع (Docker)
 
@@ -52,7 +57,9 @@ scripts/download_models.sh
 cd services/api && npm ci && npm run build && RASED_ADMIN_PASSWORD='...' npm start
 cd services/web && npm ci && npm run dev                 # http://localhost:5173
 cd services/analytics && pip install -e . && python -m rased_analytics.runner
-cd services/vision && pip install -e . && python -m rased_vision.main
+cd services/vision && pip install -e ".[trainer]" && python -m rased_vision.main
+python -m rased_trainer.worker      # عامل التدريب لصفحة «تحسين النظام»
+python scripts/fetch_samples.py     # مقاطع تجريبية من صور عامة (يحتاج إنترنت)
 # تحليل ملف فيديو بدون الخادم:
 python -m rased_vision.offline samples/people-1.mp4 --config deploy/demo/cameras.yaml --camera demo-1
 ```
@@ -73,6 +80,8 @@ python training/train_fight.py --synthetic --epochs 2   # فحص خط التدر
 - [docs/analytics.md](docs/analytics.md): كيف يُحسب مؤشر التوتر والتنبؤ
 - [docs/governance.md](docs/governance.md): الخصوصية والصلاحيات والتدقيق والاحتفاظ
 - [docs/deployment.md](docs/deployment.md): النشر داخل المنشأة والكاميرات والكرت
+- [docs/training-studio.md](docs/training-studio.md): تحسين النظام من الواجهة (البيانات والتقسيم والتدريب والنماذج وضبط القواعد)
+- [docs/hosting.md](docs/hosting.md): النسخة التجريبية على استضافة مجانية
 - [docs/pilot.md](docs/pilot.md): خطة المشروع التجريبي وبوابات القبول ومؤشرات النجاح
 - [docs/demo.md](docs/demo.md): سيناريو العرض على المسؤولين
 - [training/README.md](training/README.md): تدريب نموذج العراك وتقييمه وتحسين الأداء

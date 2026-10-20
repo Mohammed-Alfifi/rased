@@ -163,3 +163,13 @@ def test_client_serializes_numpy():
     from rased_vision.client import dumps
     body = {"a": np.float32(0.5), "b": np.int64(3), "c": np.array([1.0, 2.0], dtype=np.float32)}
     assert json.loads(dumps(body)) == {"a": 0.5, "b": 3, "c": [1.0, 2.0]}
+
+
+def test_fight_model_switches_at_run_time(tmp_path):
+    from rased_vision.rules.fight import FightRule
+    rule = FightRule()
+    assert rule.mode == "rules"
+    rule.set_model(str(tmp_path / "missing.onnx"))  # a missing file never breaks detection
+    assert rule.mode == "rules"
+    rule.set_model(None)
+    assert rule.mode == "rules"

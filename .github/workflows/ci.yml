@@ -76,5 +76,14 @@ jobs:
       - run: docker build -f services/api/Dockerfile -t rased-api services
       - run: docker build -t rased-analytics services/analytics
       - run: docker build -t rased-vision services/vision
+      - run: docker build -f deploy/hf/Dockerfile -t rased-demo .
       - name: Compose file is valid
         run: docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example config -q
+
+  samples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Public sample photos download and become clips
+        run: python scripts/fetch_samples.py --out /tmp/samples --seconds 5 && ls -la /tmp/samples

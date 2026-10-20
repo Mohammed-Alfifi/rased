@@ -4,13 +4,16 @@ import { CurrentUser, MinRole } from '../auth/decorators';
 import { AuthUser } from '../common/roles';
 import { DbService } from '../db/db.service';
 
-/** Which settings exist and how each is validated. Anything else is rejected. */
+/**
+ * Which settings can be changed here and how each is validated. The fight model and its
+ * threshold are NOT here: they change only through model activation (/training), which
+ * enforces the quality gate.
+ */
 const SCHEMA: Record<string, (v: unknown) => boolean> = {
   shadow_mode: (v) => typeof v === 'boolean',
   retention_days: (v) => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 3650,
   clip_retention_days: (v) => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 3650,
   timezone: (v) => typeof v === 'string' && (v as string).length < 64,
-  fight_model: (v) => v === null || (typeof v === 'string' && (v as string).length < 300),
   demo_data: (v) => typeof v === 'boolean',
 };
 

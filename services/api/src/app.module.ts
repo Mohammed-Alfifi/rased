@@ -18,6 +18,8 @@ import { IngestController } from './ingest/ingest.controller';
 import { ReportsController } from './reports/reports.controller';
 import { RetentionService } from './retention/retention.service';
 import { SettingsController } from './settings/settings.controller';
+import { TrainingController } from './training/training.controller';
+import { TuningController } from './tuning/tuning.controller';
 import { UsersController } from './users/users.controller';
 import { ZonesController } from './zones/zones.controller';
 
@@ -36,6 +38,8 @@ import { ZonesController } from './zones/zones.controller';
     HeadcountsController,
     ReportsController,
     SettingsController,
+    TrainingController,
+    TuningController,
     AuditController,
     HealthController,
   ],

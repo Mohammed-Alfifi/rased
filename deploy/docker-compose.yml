@@ -38,8 +38,10 @@ services:
       RASED_SERVICE_KEY: ${RASED_SERVICE_KEY:?set RASED_SERVICE_KEY}
       RASED_ADMIN_PASSWORD: ${RASED_ADMIN_PASSWORD:-}
       RASED_JWT_TTL: ${RASED_JWT_TTL:-8h}
+      RASED_TRAINING_DIR: /data/training
     volumes:
       - clips:/data/clips:ro          # the API only reads clips
+      - training:/data/training       # labelled clips copied in by the training studio
     ports:
       # bind to the control-room interface only; put TLS in front (see docs/deployment.md)
       - "${RASED_BIND:-127.0.0.1}:3000:3000"
@@ -72,14 +74,34 @@ services:
       RASED_BLUR_FACES: "true"
     volumes:
       - clips:/data/clips
-      - ${RASED_MODELS_DIR:-./models}:/app/extra-models:ro   # trained fight.onnx / exported engines
+      - models:/data/models:ro                               # models trained in the studio
+      - ${RASED_MODELS_DIR:-./models}:/app/extra-models:ro   # exported engines (training/export_models.py)
     networks: [internal, cameras]
+
+  # Training studio worker: trains the fight model on clips labelled in the command centre.
+  trainer:
+    build: ../services/vision
+    restart: unless-stopped
+    command: ["python3", "-m", "rased_trainer.worker"]
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      RASED_DATABASE_URL: postgresql://rased:${RASED_DB_PASSWORD}@db:5432/rased
+      RASED_TRAINING_DIR: /data/training
+      RASED_MODELS_DIR: /data/models
+      RASED_DEVICE: ${RASED_DEVICE:-}
+    volumes:
+      - training:/data/training
+      - models:/data/models
+    networks: [internal]
 
   # ---- demo only: a local RTSP server fed with recorded clips, standing in for cameras ----
   mediamtx:
     profiles: [demo]
     image: bluenviron/mediamtx:1.9.3
     restart: unless-stopped
+    volumes:
+      - ./demo/mediamtx.yml:/mediamtx.yml:ro
     networks: [cameras]
 
   feeder:
@@ -96,6 +118,8 @@ services:
 volumes:
   db:
   clips:
+  training:
+  models:
 
 networks:
   internal:

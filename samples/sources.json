@@ -1,0 +1,46 @@
+{
+  "license": "Unsplash License (https://unsplash.com/license): free to use, no permission needed. Credited here anyway.",
+  "note": "Photos of public places in Saudi Arabia, used only to demonstrate detection. The system pixelates every face in the clips it saves. Religious sites were deliberately excluded.",
+  "photos": [
+    {
+      "slug": "jeddah-albalad",
+      "place": "جدة التاريخية (البلد)",
+      "unsplash_id": "Zsq071YLhcU",
+      "page": "https://unsplash.com/photos/a-group-of-people-walking-down-a-street-next-to-tall-buildings-Zsq071YLhcU",
+      "photographer": "abdullah alallah",
+      "handle": "abdullah_alallah"
+    },
+    {
+      "slug": "riyadh-boulevard",
+      "place": "بوليفارد الرياض",
+      "unsplash_id": "5OJ513xnErk",
+      "page": "https://unsplash.com/photos/illuminated-boulevard-studios-entrance-at-night-with-people-below-5OJ513xnErk",
+      "photographer": "Ahmed Alghali",
+      "handle": "a7med7"
+    },
+    {
+      "slug": "riyadh-sidewalk",
+      "place": "شارع في الرياض",
+      "unsplash_id": "P3tGDXrJBKM",
+      "page": "https://unsplash.com/photos/man-in-white-thobe-walks-on-a-sunny-city-sidewalk-P3tGDXrJBKM",
+      "photographer": "Tati Odintsova",
+      "handle": "orangelatte"
+    },
+    {
+      "slug": "alula-palms",
+      "place": "العُلا",
+      "unsplash_id": "8q9vB0iBLSg",
+      "page": "https://unsplash.com/photos/people-walk-past-palm-trees-and-large-desert-rock-formations-8q9vB0iBLSg",
+      "photographer": "Ameer Albahouth",
+      "handle": "ameeralbahouth"
+    },
+    {
+      "slug": "hegra-visitors",
+      "place": "الحِجر، العُلا",
+      "unsplash_id": "auhcdsT12HA",
+      "page": "https://unsplash.com/photos/a-group-of-people-standing-in-front-of-a-rock-formation-auhcdsT12HA",
+      "photographer": "Khawaja Umer Farooq",
+      "handle": "kufarooq"
+    }
+  ]
+}

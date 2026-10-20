@@ -1,4 +1,5 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { api } from '../api';
 import { Mark } from '../App';
 import { useAuth } from '../auth';
 
@@ -8,6 +9,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [demo, setDemo] = useState<{ users: string[]; password: string } | null>(null);
+  useEffect(() => { api<{ demoLogins: typeof demo }>('/system/info').then((i) => setDemo(i.demoLogins)).catch(() => undefined); }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -38,6 +41,16 @@ export default function LoginPage() {
           </div>
           {error && <div className="error" role="alert">{error}</div>}
           <button className="btn primary" disabled={busy}>{busy ? 'جارٍ الدخول…' : 'تسجيل الدخول'}</button>
+          {demo && (
+            <div className="panel" style={{ fontSize: 14 }}>
+              <div style={{ marginBottom: 6 }}>نسخة تجريبية ببيانات مولّدة. ادخل بأحد الحسابات:</div>
+              {demo.users.map((u) => (
+                <button key={u} type="button" className="btn ghost" style={{ margin: '0 0 6px 6px' }}
+                  onClick={() => { setUsername(u); setPassword(demo.password); }}>{u}</button>
+              ))}
+              <div className="muted">كلمة المرور: <span className="num">{demo.password}</span></div>
+            </div>
+          )}
         </form>
       </div>
       <div className="login-art" aria-hidden="true">

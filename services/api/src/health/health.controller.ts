@@ -17,6 +17,18 @@ export class HealthController {
     }
   }
 
+  /** Public facts the login page needs. Demo accounts are listed only on the hosted demo. */
+  @Public()
+  @Get('system/info')
+  info() {
+    return {
+      name: 'Rased',
+      demoLogins: process.env.RASED_DEMO_LOGINS === '1'
+        ? { users: ['demo.operator', 'demo.supervisor', 'demo.manager'], password: 'Demo-Password-2026' }
+        : null,
+    };
+  }
+
   /** System status for the command centre header. */
   @Get('system/status')
   async status() {

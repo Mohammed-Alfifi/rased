@@ -15,12 +15,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# training studio worker (python -m rased_trainer.worker)
+trainer = ["torch>=2.2", "onnx>=1.16", "scikit-learn>=1.4", "psycopg[binary]>=3.1"]
 
 [project.scripts]
 rased-vision = "rased_vision.main:main"
+rased-trainer = "rased_trainer.worker:main"
 
 [tool.setuptools.packages.find]
-include = ["rased_vision*"]
+include = ["rased_vision*", "rased_trainer*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

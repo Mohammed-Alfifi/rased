@@ -16,6 +16,7 @@ import request from 'supertest';
 
 const clips = join(tmpdir(), `rased-clips-${process.pid}`);
 process.env.RASED_CLIPS_DIR = clips;
+process.env.RASED_TRAINING_DIR = join(tmpdir(), `rased-training-${process.pid}`);
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createApp } = require('../src/bootstrap');
@@ -212,5 +213,96 @@ describe('retention', () => {
     await request(http).get(`/api/events/${id}`).set(auth('supervisor')).expect(404);
     const audit = await request(http).get('/api/audit?action=retention').set(auth('manager')).expect(200);
     expect(audit.body.length).toBeGreaterThan(0);
+  });
+});
+
+describe('training studio', () => {
+  it('is for admins only', () => request(http).get('/api/training/summary').set(auth('manager')).expect(403));
+
+  it('uploads labelled clips, splits them and refuses to train on too little data', async () => {
+    for (let i = 0; i < 6; i++) {
+      for (const label of ['positive', 'negative']) {
+        await request(http).post('/api/training/items/upload').set(auth('admin'))
+          .attach('file', Buffer.from('fake-video'), `clip-${label}-${i}.mp4`).field('label', label).expect(201);
+      }
+    }
+    await request(http).post('/api/training/items/upload').set(auth('admin'))
+      .attach('file', Buffer.from('x'), 'notes.txt').field('label', 'positive').expect(400);
+    await request(http).post('/api/training/split').set(auth('admin')).send({ train: 70, val: 15, test: 10 }).expect(400);
+    const split = await request(http).post('/api/training/split').set(auth('admin')).send({ train: 70, val: 15, test: 15, seed: 3 }).expect(201);
+    const c = split.body.summary;
+    expect(c.test.positive).toBeGreaterThanOrEqual(1);
+    expect(c.test.negative).toBeGreaterThanOrEqual(1);
+    expect(c.train.positive + c.val.positive + c.test.positive).toBe(6);
+    const s = await request(http).get('/api/training/summary').set(auth('admin')).expect(200);
+    expect(s.body.canTrain).toBe(false);
+    await request(http).post('/api/training/jobs').set(auth('admin')).send({}).expect(400);
+  });
+
+  it('keeps the test set fixed when new clips are split', async () => {
+    const before = (await request(http).get('/api/training/items?split=test').set(auth('admin'))).body.map((i: any) => i.id).sort();
+    await request(http).post('/api/training/items/upload').set(auth('admin'))
+      .attach('file', Buffer.from('v'), 'new.mp4').field('label', 'positive').expect(201);
+    await request(http).post('/api/training/split').set(auth('admin')).send({ train: 70, val: 15, test: 15, keepTest: true }).expect(201);
+    const after = (await request(http).get('/api/training/items?split=test').set(auth('admin'))).body.map((i: any) => i.id).sort();
+    expect(after).toEqual(before);
+  });
+
+  it('turns reviewed fight alerts into labelled clips', async () => {
+    const id = await ingestEvent();
+    await request(http).post(`/api/events/${id}/review`).set(auth('operator')).send({ decision: 'confirmed' }).expect(201);
+    writeFileSync(join(clips, 'cam-a', 'clip1.mp4'), 'fake-mp4'); // the retention test removed it
+    const r = await request(http).post('/api/training/items/from-reviews').set(auth('admin')).send({}).expect(201);
+    expect(r.body.added).toBeGreaterThanOrEqual(1);
+    const items = (await request(http).get('/api/training/items').set(auth('admin'))).body;
+    expect(items.find((i: any) => i.eventId === id)?.label).toBe('positive');
+  });
+
+  it('the model switch is gated, and an override needs a reason and is audited', async () => {
+    const c = new Client({ connectionString: process.env.RASED_DATABASE_URL });
+    await c.connect();
+    const weak = (await c.query(
+      `INSERT INTO model_versions (version, path, threshold, metrics) VALUES (1, '/models/fight-v1.onnx', 0.6, $1) RETURNING id`,
+      [JSON.stringify({ test: { video: { recall: 0.5, f1: 0.6, precision: 0.8 } } })],
+    )).rows[0].id;
+    const good = (await c.query(
+      `INSERT INTO model_versions (version, path, threshold, metrics) VALUES (2, '/models/fight-v2.onnx', 0.7, $1) RETURNING id`,
+      [JSON.stringify({ test: { video: { recall: 0.9, f1: 0.88, precision: 0.86 } } })],
+    )).rows[0].id;
+    await c.end();
+
+    const refused = await request(http).post(`/api/training/models/${weak}/activate`).set(auth('admin')).send({}).expect(400);
+    expect(refused.body.problems[0]).toMatch(/recall/);
+    await request(http).post(`/api/training/models/${weak}/activate`).set(auth('admin')).send({ force: true }).expect(400);
+    await request(http).post(`/api/training/models/${good}/activate`).set(auth('admin')).send({}).expect(201);
+    const cfg = await request(http).get('/api/ingest/config').set(SERVICE).expect(200);
+    expect(cfg.body.fightModel).toBe('/models/fight-v2.onnx');
+    expect(cfg.body.fightThreshold).toBeCloseTo(0.7);
+    await request(http).post(`/api/training/models/${weak}/activate`).set(auth('admin'))
+      .send({ force: true, reason: 'Pilot test on camera A only' }).expect(201);
+    const audit = await request(http).get('/api/audit?action=model').set(auth('manager')).expect(200);
+    expect(audit.body.map((a: any) => a.action)).toContain('model.activated_override');
+    await request(http).post('/api/training/models/deactivate').set(auth('admin')).expect(201);
+    expect((await request(http).get('/api/ingest/config').set(SERVICE)).body.fightModel).toBeNull();
+  });
+
+  it('the fight model cannot be changed through settings', () =>
+    request(http).patch('/api/settings').set(auth('admin')).send({ fight_model: '/tmp/evil.onnx' }).expect(400));
+});
+
+describe('rule tuning', () => {
+  it('suggests a less sensitive setting where alerts are mostly dismissed, and applies it', async () => {
+    for (let i = 0; i < 6; i++) {
+      const id = await ingestEvent({ type: 'running', severity: 'medium', clipPath: undefined, snapshotPath: undefined });
+      await request(http).post(`/api/events/${id}/review`).set(auth('operator')).send({ decision: 'dismissed', reason: 'normal_activity' }).expect(201);
+    }
+    const s = await request(http).get('/api/tuning/suggestions').set(auth('admin')).expect(200);
+    const run = s.body.find((x: any) => x.type === 'running' && x.cameraId === 'cam-a');
+    expect(run).toMatchObject({ param: 'running_speed', current: 1.6, suggested: 2 });
+    await request(http).post('/api/tuning/apply').set(auth('admin'))
+      .send({ cameraId: 'cam-a', param: 'running_speed', value: run.suggested, type: 'running' }).expect(201);
+    const cfg = await request(http).get('/api/ingest/config').set(SERVICE);
+    expect(cfg.body.cameras[0].params.running_speed).toBe(2);
+    await request(http).post('/api/tuning/apply').set(auth('admin')).send({ cameraId: 'cam-a', param: 'rm_rf', value: 1 }).expect(400);
   });
 });

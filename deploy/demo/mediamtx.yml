@@ -1,0 +1,8 @@
+# Local RTSP server for demos: accept any stream path, RTSP only.
+logLevel: warn
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+paths:
+  all_others:

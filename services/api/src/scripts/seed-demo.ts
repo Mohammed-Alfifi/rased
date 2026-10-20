@@ -67,7 +67,8 @@ async function main() {
   const q = (t: string, p: unknown[] = []) => pool.query(t, p as any[]);
 
   await q(`TRUNCATE areas, cameras, zones, events, zone_metrics, camera_status, camera_heartbeats, area_scores,
-           area_forecasts, analytics_reports, headcounts CASCADE`);
+           area_forecasts, analytics_reports, headcounts, dataset_items, training_jobs, model_versions CASCADE`);
+  await q(`UPDATE settings SET value = 'null' WHERE key = 'fight_model'`);
 
   const pwd = await bcrypt.hash('Demo-Password-2026', 10);
   for (const [u, n, role] of [['demo.operator', 'مشغّل تجريبي', 'operator'], ['demo.supervisor', 'مشرف تجريبي', 'supervisor'], ['demo.manager', 'مدير تجريبي', 'manager']]) {
@@ -85,10 +86,12 @@ async function main() {
       [c.id, c.name, `${rtspBase}/${c.id}`, areaIds[c.area], c.x, c.y, JSON.stringify({})]);
   }
   await q(`INSERT INTO zones (camera_id, name, kind, polygon) VALUES
-     ('yard-2', 'منطقة السور', 'perimeter', '[[0.0,0.0],[1.0,0.0],[1.0,0.25],[0.0,0.25]]'),
+     ('yard-2', 'منطقة السور', 'perimeter', '[[0.0,0.55],[1.0,0.55],[1.0,1.0],[0.0,1.0]]'),
      ('wing-a-2', 'باب العنبر أ', 'count', '[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]]'),
      ('wing-b-2', 'باب العنبر ب', 'count', '[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]]'),
-     ('visit-1', 'منطقة التسليم', 'restricted', '[[0.4,0.6],[0.6,0.6],[0.6,1.0],[0.4,1.0]]')`);
+     ('visit-1', 'منطقة التسليم', 'restricted', '[[0.5,0.5],[1.0,0.5],[1.0,1.0],[0.5,1.0]]')`);
+  // smaller groups count as gatherings in the demo clips, which show a few people at a time
+  await q(`UPDATE cameras SET params = '{"gathering_min": 3}' WHERE id IN ('wing-a-2', 'wing-b-1')`);
 
   // 4 weeks of 15-minute camera-level metrics, with a few tense evenings in Wing B that precede incidents.
   const end = Math.floor(Date.now() / (15 * 60_000)) * 15 * 60_000;
@@ -134,14 +137,19 @@ async function main() {
     if (metrics.length >= 400) await flush();
   }
   await flush();
+  // The yard is used for football: running alerts there were mostly dismissed as normal
+  // activity, which is what the rule-tuning tab is meant to pick up.
+  for (let i = 0; i < 9; i++) events.push(['yard-1', areaIds.yard, 'running', 'medium', end - (i + 1) * 0.7 * DAY + 10 * 3_600_000]);
   // the incidents at the end of the tense evenings
   for (const x of tense) events.push(['wing-b-1', areaIds.b, 'fight', 'critical', x + 5 * 60_000]);
 
   for (const [cam, area, type, severity, at] of events as [string, string, string, string, number][]) {
     const old = at < Date.now() - DAY;
     const roll = r();
-    const status = !old && roll < 0.5 ? 'new' : roll < (type === 'fight' ? 0.85 : 0.6) ? 'confirmed' : 'dismissed';
-    const reason = status === 'dismissed' ? ['normal_activity', 'false_detection', 'duplicate'][Math.floor(r() * 3)] : null;
+    const yardRun = cam === 'yard-1' && type === 'running';
+    const status = yardRun ? (roll < 0.15 ? 'confirmed' : 'dismissed')
+      : !old && roll < 0.5 ? 'new' : roll < (type === 'fight' ? 0.85 : 0.6) ? 'confirmed' : 'dismissed';
+    const reason = status === 'dismissed' ? (yardRun ? 'normal_activity' : ['normal_activity', 'false_detection', 'duplicate'][Math.floor(r() * 3)]) : null;
     const started = new Date(at);
     const received = new Date(at + 2_000 + r() * 2_500);
     await q(

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import signal
 import sys
 import time
@@ -36,8 +37,11 @@ def main() -> int:
                 time.sleep(5)
                 continue
             cameras = cameras_from_dict(data)
-            if "fightModel" in data and data["fightModel"]:
-                settings.fight_model = data["fightModel"]
+            settings.fight_model = data.get("fightModel") or os.environ.get("RASED_FIGHT_MODEL") or None
+            fight_threshold = float(data.get("fightThreshold") or 0.6)
+            for w in workers.values():
+                w.engine.fight.set_model(settings.fight_model)
+                w.engine.fight.default_threshold = fight_threshold
 
         wanted = {c.id: c for c in cameras if c.enabled}
         for cid in list(workers):
@@ -50,6 +54,8 @@ def main() -> int:
             else:
                 log.info("starting camera %s (%s)", cid, cam.name)
                 w = CameraWorker(cam, settings, client)
+                if not settings.config_file:
+                    w.engine.fight.default_threshold = fight_threshold
                 w.start()
                 workers[cid] = w
 

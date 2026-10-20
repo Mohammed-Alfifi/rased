@@ -65,8 +65,10 @@ export class IngestController {
       `SELECT id, camera_id, name, kind, polygon, params, restricted_hours AS "restrictedHours" FROM zones`,
     );
     const fightModel = await this.db.setting<string | null>('fight_model', null);
+    const fightThreshold = await this.db.setting<number>('fight_threshold', 0.6);
     return {
       fightModel,
+      fightThreshold,
       cameras: cameras.map((c) => ({ ...c, zones: zones.filter((z) => z.camera_id === c.id) })),
     };
   }

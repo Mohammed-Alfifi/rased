@@ -22,61 +22,14 @@ import os
 import sys
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "services" / "vision"))
-from rased_vision.pose_features import (  # noqa: E402
-    TARGET_FPS, WINDOW, pair_window_features, wrist_energy,
-)
+from rased_trainer.features import best_pair, video_tracks  # noqa: E402
+from rased_vision.pose_features import WINDOW, pair_window_features  # noqa: E402
 
 VIDEO_EXT = {".avi", ".mp4", ".mov", ".mkv"}
 LABELS = {"Fight": 1, "NonFight": 0, "fight": 1, "nonfight": 0, "non_fight": 0}
-
-
-def video_tracks(model, path: str, device: str | None, imgsz: int) -> tuple[dict[int, dict[int, np.ndarray]], int, float]:
-    """Run pose tracking at TARGET_FPS. Returns {track_id: {frame_index: keypoints}}, frame count, aspect."""
-    cap = cv2.VideoCapture(path)
-    src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    step = max(1, round(src_fps / TARGET_FPS))
-    tracks: dict[int, dict[int, np.ndarray]] = {}
-    idx = n = 0
-    aspect = 16 / 9
-    model.predictor = None  # reset tracker between videos
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        if idx % step == 0:
-            h, w = frame.shape[:2]
-            aspect = w / h
-            res = model.track(frame, persist=True, tracker="bytetrack.yaml", classes=[0], imgsz=imgsz,
-                              verbose=False, device=device)[0]
-            if res.boxes is not None and res.boxes.id is not None and res.keypoints is not None:
-                kps = res.keypoints.data.cpu().numpy()
-                for tid, kp in zip(res.boxes.id.int().cpu().numpy(), kps):
-                    kp = kp.astype(np.float32).copy()
-                    kp[:, 0] /= w
-                    kp[:, 1] /= h
-                    tracks.setdefault(int(tid), {})[n] = kp
-            n += 1
-        idx += 1
-    cap.release()
-    return tracks, n, aspect
-
-
-def best_pair(tracks, start: int, aspect: float):
-    """The pair of people in this window with the most arm movement (or one person + nobody)."""
-    window = range(start, start + WINDOW)
-    seqs = {tid: [frames.get(i) for i in window] for tid, frames in tracks.items()}
-    seqs = {tid: s for tid, s in seqs.items() if sum(x is not None for x in s) >= WINDOW // 3}
-    if not seqs:
-        return None
-    energy = {tid: wrist_energy(s, aspect) for tid, s in seqs.items()}
-    ranked = sorted(energy, key=energy.get, reverse=True)
-    a = seqs[ranked[0]]
-    b = seqs[ranked[1]] if len(ranked) > 1 else [None] * WINDOW
-    return a, b
 
 
 def build_split(model, root: Path, split: str, device, imgsz: int, stride: int):
