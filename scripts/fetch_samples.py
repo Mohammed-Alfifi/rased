@@ -17,13 +17,35 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-UA = {"User-Agent": "rased-demo-sample-fetcher/1.0 (+https://github.com/Mohammed-Alfifi/rased)"}
+UA = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept": "image/jpeg,image/*;q=0.8,*/*;q=0.5",
+}
 
 
 def download(url: str, dest: Path) -> None:
     req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
-        shutil.copyfileobj(r, f)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        data = r.read()
+    if not data.startswith(b"\xff\xd8"):
+        raise ValueError(f"not a JPEG from {url} ({len(data)} bytes)")
+    dest.write_bytes(data)
+
+
+def fetch_photo(p: dict, dest: Path) -> None:
+    """Try the Unsplash image CDN first, then the photo's download link."""
+    urls = []
+    if p.get("cdn_id"):
+        urls.append(f"https://images.unsplash.com/{p['cdn_id']}?fm=jpg&q=80&w=2400")
+    urls.append(f"https://unsplash.com/photos/{p['unsplash_id']}/download?force=true&w=2400")
+    errors = []
+    for url in urls:
+        try:
+            download(url, dest)
+            return
+        except Exception as e:  # try the next source
+            errors.append(f"{url}: {e}")
+    raise RuntimeError("; ".join(errors))
 
 
 def make_clip(img: Path, out: Path, seconds: int) -> None:
@@ -58,12 +80,12 @@ def main() -> int:
         clip = out / f"{p['slug']}.mp4"
         try:
             if not img.exists():
-                download(f"https://unsplash.com/photos/{p['unsplash_id']}/download?force=true&w=2400", img)
+                fetch_photo(p, img)
             make_clip(img, clip, args.seconds)
             ok += 1
             print(f"ok   {clip.name}")
         except Exception as e:  # keep going: one missing photo should not break a deploy
-            print(f"skip {p['slug']}: {e}", file=sys.stderr)
+            print(f"::warning::skip {p['slug']}: {e}")
             continue
         credits.append(f"| {clip.name} | {p['place']} | [{p['photographer']}](https://unsplash.com/@{p['handle']}) | [Unsplash]({p['page']}) |")
     (out / "ATTRIBUTION.md").write_text("\n".join(credits) + "\n", encoding="utf-8")

@@ -8,7 +8,8 @@
       "unsplash_id": "Zsq071YLhcU",
       "page": "https://unsplash.com/photos/a-group-of-people-walking-down-a-street-next-to-tall-buildings-Zsq071YLhcU",
       "photographer": "abdullah alallah",
-      "handle": "abdullah_alallah"
+      "handle": "abdullah_alallah",
+      "cdn_id": "photo-1727047841484-5c828ae14d5c"
     },
     {
       "slug": "riyadh-boulevard",
@@ -16,7 +17,8 @@
       "unsplash_id": "5OJ513xnErk",
       "page": "https://unsplash.com/photos/illuminated-boulevard-studios-entrance-at-night-with-people-below-5OJ513xnErk",
       "photographer": "Ahmed Alghali",
-      "handle": "a7med7"
+      "handle": "a7med7",
+      "cdn_id": "photo-1783261289457-8437e0e27993"
     },
     {
       "slug": "riyadh-sidewalk",
@@ -24,7 +26,8 @@
       "unsplash_id": "P3tGDXrJBKM",
       "page": "https://unsplash.com/photos/man-in-white-thobe-walks-on-a-sunny-city-sidewalk-P3tGDXrJBKM",
       "photographer": "Tati Odintsova",
-      "handle": "orangelatte"
+      "handle": "orangelatte",
+      "cdn_id": "photo-1784637578383-dc0cf70d641a"
     },
     {
       "slug": "alula-palms",
@@ -32,7 +35,8 @@
       "unsplash_id": "8q9vB0iBLSg",
       "page": "https://unsplash.com/photos/people-walk-past-palm-trees-and-large-desert-rock-formations-8q9vB0iBLSg",
       "photographer": "Ameer Albahouth",
-      "handle": "ameeralbahouth"
+      "handle": "ameeralbahouth",
+      "cdn_id": "photo-1782216332049-04d1b46958d6"
     },
     {
       "slug": "hegra-visitors",
@@ -40,7 +44,8 @@
       "unsplash_id": "auhcdsT12HA",
       "page": "https://unsplash.com/photos/a-group-of-people-standing-in-front-of-a-rock-formation-auhcdsT12HA",
       "photographer": "Khawaja Umer Farooq",
-      "handle": "kufarooq"
+      "handle": "kufarooq",
+      "cdn_id": "photo-1643892114191-3d995e9e68c2"
     }
   ]
 }
