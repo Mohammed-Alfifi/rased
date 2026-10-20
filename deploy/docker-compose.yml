@@ -1,0 +1,104 @@
+# Rased: one isolated server inside the facility network. Nothing here needs the internet
+# at run time (model weights are baked into the vision image).
+#
+#   cp deploy/.env.example deploy/.env       # then set real secrets
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#   Demo with simulated cameras:  docker compose -f deploy/docker-compose.yml --profile demo up -d --build
+#   NVIDIA GPU:  add -f deploy/docker-compose.gpu.yml
+name: rased
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rased
+      POSTGRES_USER: rased
+      POSTGRES_PASSWORD: ${RASED_DB_PASSWORD:?set RASED_DB_PASSWORD in deploy/.env}
+      TZ: Asia/Riyadh
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rased -d rased"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  api:
+    build:
+      context: ../services
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      RASED_DATABASE_URL: postgresql://rased:${RASED_DB_PASSWORD}@db:5432/rased
+      RASED_JWT_SECRET: ${RASED_JWT_SECRET:?set RASED_JWT_SECRET}
+      RASED_SERVICE_KEY: ${RASED_SERVICE_KEY:?set RASED_SERVICE_KEY}
+      RASED_ADMIN_PASSWORD: ${RASED_ADMIN_PASSWORD:-}
+      RASED_JWT_TTL: ${RASED_JWT_TTL:-8h}
+    volumes:
+      - clips:/data/clips:ro          # the API only reads clips
+    ports:
+      # bind to the control-room interface only; put TLS in front (see docs/deployment.md)
+      - "${RASED_BIND:-127.0.0.1}:3000:3000"
+    networks: [internal, frontend]
+
+  analytics:
+    build: ../services/analytics
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }   # the API applies the schema
+    environment:
+      RASED_DATABASE_URL: postgresql://rased:${RASED_DB_PASSWORD}@db:5432/rased
+      RASED_ANALYTICS_EVERY: ${RASED_ANALYTICS_EVERY:-900}
+    networks: [internal]
+
+  vision:
+    build: ../services/vision
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      RASED_API_URL: http://api:3000
+      RASED_SERVICE_KEY: ${RASED_SERVICE_KEY}
+      RASED_TARGET_FPS: ${RASED_TARGET_FPS:-15}
+      RASED_IMGSZ: ${RASED_IMGSZ:-640}
+      RASED_DEVICE: ${RASED_DEVICE:-}
+      RASED_FIGHT_MODEL: ${RASED_FIGHT_MODEL:-}
+      RASED_POSE_MODEL: ${RASED_POSE_MODEL:-models/yolo11n-pose.pt}
+      RASED_OBJECT_MODEL: ${RASED_OBJECT_MODEL:-models/yolo11n.pt}
+      RASED_BLUR_FACES: "true"
+    volumes:
+      - clips:/data/clips
+      - ${RASED_MODELS_DIR:-./models}:/app/extra-models:ro   # trained fight.onnx / exported engines
+    networks: [internal, cameras]
+
+  # ---- demo only: a local RTSP server fed with recorded clips, standing in for cameras ----
+  mediamtx:
+    profiles: [demo]
+    image: bluenviron/mediamtx:1.9.3
+    restart: unless-stopped
+    networks: [cameras]
+
+  feeder:
+    profiles: [demo]
+    image: linuxserver/ffmpeg:7.1.1
+    restart: unless-stopped
+    depends_on: [mediamtx]
+    entrypoint: ["/bin/bash", "/demo/feed.sh"]
+    volumes:
+      - ./demo:/demo:ro
+      - ../samples:/samples:ro
+    networks: [cameras]
+
+volumes:
+  db:
+  clips:
+
+networks:
+  internal:
+    internal: true        # database and services: no route outside
+  frontend: {}
+  cameras: {}             # attach to the camera VLAN in production (see docs/deployment.md)

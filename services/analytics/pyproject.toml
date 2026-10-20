@@ -1,0 +1,15 @@
+[project]
+name = "rased-analytics"
+version = "0.1.0"
+description = "Rased analytics: per-area baselines, anomaly scores, tension index and 24h forecasts"
+requires-python = ">=3.10"
+dependencies = ["pandas>=2.1", "numpy>=1.26", "scikit-learn>=1.4", "statsmodels>=0.14", "psycopg[binary]>=3.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+rased-analytics = "rased_analytics.runner:main"
+
+[tool.setuptools.packages.find]
+include = ["rased_analytics*"]

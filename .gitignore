@@ -1,0 +1,20 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+# data and secrets
+data/
+deploy/.env
+deploy/models/
+# model weights are downloaded (see scripts/download_models.sh), trained outputs stay local
+services/vision/models/
+training/data/
+training/runs/
+*.pt
+*.onnx
+*.engine
+# generated sample videos (deploy/demo/make_sample.sh)
+samples/*.mp4

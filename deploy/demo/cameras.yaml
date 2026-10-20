@@ -1,0 +1,21 @@
+# Offline config for the vision service without the API (RASED_CONFIG_FILE=deploy/demo/cameras.yaml)
+# or for:  python -m rased_vision.offline samples/people-1.mp4 --config deploy/demo/cameras.yaml --camera demo-1
+cameras:
+  - id: demo-1
+    name: Demo camera 1
+    url: samples/people-1.mp4
+    params: {}
+    zones:
+      - id: 00000000-0000-4000-8000-000000000001
+        name: Service corridor
+        kind: restricted
+        polygon: [[0.5, 0.0], [1.0, 0.0], [1.0, 1.0], [0.5, 1.0]]
+  - id: demo-2
+    name: Demo camera 2
+    url: samples/people-2.mp4
+    params: {gathering_min: 3}
+    zones:
+      - id: 00000000-0000-4000-8000-000000000002
+        name: Fence
+        kind: perimeter
+        polygon: [[0.0, 0.6], [1.0, 0.6], [1.0, 1.0], [0.0, 1.0]]
